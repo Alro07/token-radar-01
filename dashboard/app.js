@@ -437,7 +437,7 @@
 
   // One line naming what carries a row's rank: momentum, age or sheer size.
   function driverLine(row) {
-    var m = row.model || {};
+    var m = row;
     if (m.growth_multiplier !== undefined && m.growth_multiplier >= 1.5) {
       return 'Momentum is doing the work: seven-day growth of ' + fmtPct(row.change_7d) + ' lifts the value ' + m.growth_multiplier + 'x.';
     }
@@ -457,7 +457,7 @@
     writeHash();
     dialog.textContent = '';
     var steps = farmSteps(row);
-    var m = row.model || {};
+    var m = row;
     dialog.appendChild(el('div', { class: 'detail-head' },
       el('div', null,
         el('span', { class: 'brand-name', text: 'Rank ' + row.rank + ' of ' + DATA.board_size }),
