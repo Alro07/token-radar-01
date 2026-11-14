@@ -253,13 +253,43 @@
     chainSelect.addEventListener('change', function () { state.chain = chainSelect.value; writeHash(); render(); });
     var pre = el('button', { type: 'button', 'aria-pressed': state.tab === 'pre-token' ? 'true' : 'false', text: 'Pre-token', onclick: function () { state.tab = 'pre-token'; render(); } });
     var live = el('button', { type: 'button', 'aria-pressed': state.tab === 'live' ? 'true' : 'false', text: 'Live token', onclick: function () { state.tab = 'live'; render(); } });
+    var csv = el('button', { class: 'button', type: 'button', text: 'Download CSV', onclick: downloadCsv });
     return el('div', { class: 'controls' },
       el('div', { class: 'field' }, el('label', { for: 'q', text: 'Search' }), search),
       el('div', { class: 'field' }, el('label', { for: 'category', text: 'Category' }), catSelect),
       el('div', { class: 'field' }, el('label', { for: 'chain', text: 'Chain' }), chainSelect),
       el('div', { class: 'field' }, el('span', { class: 'sub', text: 'Token status' }), el('div', { class: 'tabs' }, pre, live)),
+      csv,
       el('span', { class: 'count', text: state.tab === 'pre-token' ? rows().length + ' rows shown' : DATA.live.length + ' live-token protocols' })
     );
+  }
+
+  // The filtered board as a CSV file, so a reader can take it into a spreadsheet.
+  function downloadCsv() {
+    var list = sortedRows(rows());
+    var lines = [['rank', 'name', 'category', 'chains', 'tvl_usd', 'change_7d', 'age_days', 'implied_value_usd'].join(',')];
+    list.forEach(function (r) {
+      var cells = [
+        r.rank,
+        '"' + r.name.replace(/"/g, '""') + '"',
+        '"' + (r.category || '').replace(/"/g, '""') + '"',
+        '"' + (r.chains || []).join('; ').replace(/"/g, '""') + '"',
+        r.tvl_usd,
+        r.change_7d === null ? '' : r.change_7d,
+        r.age_days === null ? '' : r.age_days,
+        effImplied(r)
+      ];
+      lines.push(cells.join(','));
+    });
+    var blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'token-radar-board.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   }
 
   function sortHeader(key, label) {
@@ -449,6 +479,15 @@
       el('p', { class: 'sub', text: driverLine(row) }),
       el('p', { class: 'sub', text: 'Model ' + DATA.model_version + ': the same function scores every protocol. The page recomputes this row as ' + fmtUsd(impliedOf(row, effModel())) + (impliedOf(row, effModel()) === row.implied_value_usd ? ', the same number board.json carries.' : (state.custom ? ', under your sandbox model.' : ', which differs from the board: the data would be stale.')) + ' This is an estimate, not a price.' })
     ));
+    var copyBtn = el('button', { class: 'button', type: 'button', text: 'Copy farm plan', onclick: function () {
+      var text = steps.join('\n');
+      var done = function () {
+        copyBtn.textContent = 'Copied';
+        setTimeout(function () { copyBtn.textContent = 'Copy farm plan'; }, 1500);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, done);
+      else done();
+    } });
     dialog.appendChild(el('section', { class: 'detail-section' },
       el('h3', { text: 'Farm plan' }),
       el('ol', { class: 'steps' }, steps.map(function (s) {
@@ -456,7 +495,8 @@
         var action = at >= 0 ? s.slice(0, at) : s;
         var tail = at >= 0 ? s.slice(at + 1) : '';
         return el('li', null, el('b', { text: action }), el('span', { class: 'cost', text: tail }));
-      }))
+      })),
+      el('div', { class: 'sandbox-foot' }, el('span', { class: 'sub', text: 'Six steps, with a cost and a time each.' }), copyBtn)
     ));
     if (typeof dialog.showModal === 'function') {
       if (!dialog.open) dialog.showModal();
