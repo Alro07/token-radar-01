@@ -93,14 +93,42 @@
     if (s.length < 20) s = s + " Hold the position and check the protocol's own page.";
     return s;
   }
+  function gasFor(chain) {
+    var c = (chain || '').toLowerCase();
+    if (c === 'ethereum') return { setup: 'about $8 of gas', weekly: 'about $8 of gas a week' };
+    if (c === 'solana') return { setup: 'about $0.05 of gas', weekly: 'about $0.05 of gas a week' };
+    if (
+      c === 'arbitrum' || c === 'base' || c === 'optimism' || c === 'zksync era' || c === 'linea' ||
+      c === 'scroll' || c === 'blast' || c === 'mode' || c === 'fraxtal' || c === 'mantle' ||
+      c === 'polygon' || c === 'binance' || c === 'avalanche' || c === 'hyperliquid l1' || c === 'monad'
+    ) {
+      return { setup: 'about $0.30 of gas', weekly: 'about $0.30 of gas a week' };
+    }
+    return { setup: 'about $2 of gas', weekly: 'about $2 of gas a week' };
+  }
+  function weeklyActionFor(p) {
+    var c = (p.category || '').toLowerCase();
+    if (c.indexOf('lend') >= 0 || c.indexOf('cdp') >= 0 || c.indexOf('collateral') >= 0) return 'Supply or borrow a small amount once a week.';
+    if (c.indexOf('dex') >= 0 || c.indexOf('yield') >= 0 || c.indexOf('leveraged farm') >= 0) return 'Swap or add a little liquidity once a week.';
+    if (c.indexOf('bridge') >= 0) return 'Bridge a small amount once a week.';
+    if (c.indexOf('staking') >= 0 || c.indexOf('restak') >= 0) return 'Top up the stake or restake the rewards once a week.';
+    if (c.indexOf('perpetual') >= 0 || c.indexOf('derivative') >= 0) return 'Open or close one small position once a week.';
+    if (c.indexOf('prediction') >= 0) return 'Place one small market position once a week.';
+    if (c.indexOf('curator') >= 0 || c.indexOf('allocator') >= 0) return 'Top up the vault or rebalance it once a week.';
+    if (c.indexOf('stable') >= 0) return 'Mint or redeem a small amount once a week.';
+    if (c.indexOf('rwa') >= 0) return 'Check the yield and hold the asset once a week.';
+    if (c.indexOf('insurance') >= 0) return 'Check the cover and renew it if it lapses once a week.';
+    return 'Make one qualifying action each week, such as a deposit, a swap or a vote.';
+  }
   function farmSteps(p) {
     var chain = chainOf(p);
     var capital = capitalFor(p);
     var hold = holdDaysFor(p.age_days);
+    var gas = gasFor(chain);
     return [
-      { text: 'Use a fresh wallet that holds only the funds you plan to farm, and keep its seed phrase offline.', cost: 'under $3 of gas for the first transaction', time: '5 minutes' },
-      { text: actionFor(p, capital, chain), cost: '$' + capital + ' of capital and about $' + (capital >= 150 ? 8 : 4) + ' of gas', time: '15 minutes to set up' },
-      { text: 'Make one qualifying action each week, such as a deposit, a borrow, a swap or a vote.', cost: 'about $2 of gas a week', time: '10 minutes a week' },
+      { text: 'Use a fresh wallet that holds only the funds you plan to farm, and keep its seed phrase offline.', cost: gas.setup + ' for the first transaction', time: '5 minutes' },
+      { text: actionFor(p, capital, chain), cost: '$' + capital + ' of capital and ' + gas.setup, time: '15 minutes to set up' },
+      { text: weeklyActionFor(p), cost: gas.weekly, time: '10 minutes a week' },
       { text: 'Hold the position for at least ' + hold + ' days so the activity is counted in more than one snapshot.', cost: 'the $' + capital + ' stays in the position', time: hold + ' days' },
       { text: "Before you withdraw, open the protocol's own points or rewards page and claim only from the link it publishes.", cost: 'no fee to check, and never pay to claim', time: '10 minutes' },
       { text: 'Write the wallet, the dates and every transaction in a farm log so you can repeat the position or unwind it.', cost: 'nothing but the log', time: '5 minutes' }

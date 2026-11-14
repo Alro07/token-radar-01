@@ -9,10 +9,14 @@
 // Implied value follows only from the snapshot's own figures:
 //
 //   base       = tvl_usd x BASE_MULTIPLE
-//   growth     = clamp(change_7d, -60, 120) per cent
+//   growth     = clamp(change_7d, -60, 300) per cent
 //   growthMult = 1 + (growth / 100) x GROWTH_WEIGHT
 //   maturity   = 0.6 + min(age_days, 1095) / 1095 x 0.4   (age_days unknown: 365)
 //   implied    = max(1, round(base x growthMult x maturity))
+//
+// Growth past +300% in a week counts as +300%: the snapshot's fastest riser grew 4,448% in seven
+// days, and a spike that large is usually one deposit, not a trend — but it is still worth more than
+// the +120% the old cap gave it. The cap is a number, never a name: the same function scores every row.
 //
 // The constants are the house model's, stated in the dashboard and changeable in the model sandbox. No
 // protocol name is ever special-cased: the same function scores every row.
@@ -56,7 +60,7 @@ export const MODEL: ModelConstants = {
   base_multiple: 0.25,
   growth_weight: 0.5,
   growth_floor: -60,
-  growth_cap: 120,
+  growth_cap: 300,
   maturity_floor: 0.6,
   maturity_range: 0.4,
   maturity_days: 1095,
@@ -64,7 +68,7 @@ export const MODEL: ModelConstants = {
 };
 
 /** The model's version label: the dashboard names it and the rules quote it. */
-export const MODEL_VERSION = 'radar-1';
+export const MODEL_VERSION = 'radar-2';
 
 /** How many pre-token protocols below the watchlist floor the early radar carries, by TVL. */
 export const EARLY_ROWS = 160;
@@ -308,6 +312,37 @@ function actionFor(p: SnapshotProtocol, capital: number, chain: string): string 
   return `Deposit $${capital} of USDC into ${name} on ${chain} and keep the position open.`;
 }
 
+/** What one transaction costs on a chain, from the chain the protocol names first. */
+export function gasFor(chain: string): { setup: string; weekly: string } {
+  const c = chain.toLowerCase();
+  if (c === 'ethereum') return { setup: 'about $8 of gas', weekly: 'about $8 of gas a week' };
+  if (c === 'solana') return { setup: 'about $0.05 of gas', weekly: 'about $0.05 of gas a week' };
+  if (
+    c === 'arbitrum' || c === 'base' || c === 'optimism' || c === 'zksync era' || c === 'linea' ||
+    c === 'scroll' || c === 'blast' || c === 'mode' || c === 'fraxtal' || c === 'mantle' ||
+    c === 'polygon' || c === 'binance' || c === 'avalanche' || c === 'hyperliquid l1' || c === 'monad'
+  ) {
+    return { setup: 'about $0.30 of gas', weekly: 'about $0.30 of gas a week' };
+  }
+  return { setup: 'about $2 of gas', weekly: 'about $2 of gas a week' };
+}
+
+/** The one qualifying action to repeat each week, by the protocol's own category. */
+export function weeklyActionFor(p: SnapshotProtocol): string {
+  const c = (p.category ?? '').toLowerCase();
+  if (c.includes('lend') || c.includes('cdp') || c.includes('collateral')) return 'Supply or borrow a small amount once a week.';
+  if (c.includes('dex') || c.includes('yield') || c.includes('leveraged farm')) return 'Swap or add a little liquidity once a week.';
+  if (c.includes('bridge')) return 'Bridge a small amount once a week.';
+  if (c.includes('staking') || c.includes('restak')) return 'Top up the stake or restake the rewards once a week.';
+  if (c.includes('perpetual') || c.includes('derivative')) return 'Open or close one small position once a week.';
+  if (c.includes('prediction')) return 'Place one small market position once a week.';
+  if (c.includes('curator') || c.includes('allocator')) return 'Top up the vault or rebalance it once a week.';
+  if (c.includes('stable')) return 'Mint or redeem a small amount once a week.';
+  if (c.includes('rwa')) return 'Check the yield and hold the asset once a week.';
+  if (c.includes('insurance')) return 'Check the cover and renew it if it lapses once a week.';
+  return 'Make one qualifying action each week, such as a deposit, a swap or a vote.';
+}
+
 /**
  * A protocol's farm plan: six steps, each an action with a cost and a time. The plan is derived from
  * the protocol's own record (category, chains, TVL, age), never from a hand-written list of names.
@@ -317,20 +352,21 @@ export function farmSteps(p: SnapshotProtocol, age: number | null): FarmStep[] {
   const capital = capitalFor(p);
   const hold = holdDaysFor(age);
   const action = actionFor(p, capital, chain);
+  const gas = gasFor(chain);
   return [
     {
       text: `Use a fresh wallet that holds only the funds you plan to farm, and keep its seed phrase offline.`,
-      cost: 'under $3 of gas for the first transaction',
+      cost: gas.setup + ' for the first transaction',
       time: '5 minutes',
     },
     {
       text: action,
-      cost: `$${capital} of capital and about $${capital >= 150 ? 8 : 4} of gas`,
+      cost: `$${capital} of capital and ${gas.setup}`,
       time: '15 minutes to set up',
     },
     {
-      text: `Make one qualifying action each week, such as a deposit, a borrow, a swap or a vote.`,
-      cost: 'about $2 of gas a week',
+      text: weeklyActionFor(p),
+      cost: gas.weekly,
       time: '10 minutes a week',
     },
     {
