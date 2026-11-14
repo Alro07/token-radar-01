@@ -8,7 +8,12 @@
   var DATA = window.RADAR;
   if (!DATA) return;
   var app = document.getElementById('board');
-  var state = { q: '', category: 'all', chain: 'all', tab: 'pre-token', sort: 'implied', dir: -1, selected: null };
+  var state = { q: '', category: 'all', chain: 'all', tab: 'pre-token', sort: 'implied', dir: -1, selected: null, custom: null };
+
+  // The model in force: the house model from the snapshot, or the reader's own
+  // constants from the sandbox. Every implied value on the page follows this one.
+  function effModel() { return state.custom || DATA.model; }
+  function effImplied(row) { return impliedOf(row, effModel()); }
 
   var usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
   function fmtUsd(n) {
@@ -176,7 +181,7 @@
       else if (key === 'tvl') { av = a.tvl_usd; bv = b.tvl_usd; }
       else if (key === 'growth') { av = a.change_7d === null ? -Infinity : a.change_7d; bv = b.change_7d === null ? -Infinity : b.change_7d; }
       else if (key === 'age') { av = a.age_days === null ? Infinity : a.age_days; bv = b.age_days === null ? Infinity : b.age_days; }
-      else { av = a.implied_value_usd; bv = b.implied_value_usd; }
+      else { av = effImplied(a); bv = effImplied(b); }
       if (av < bv) return -state.dir;
       if (av > bv) return state.dir;
       return a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0;
@@ -282,11 +287,12 @@
         el('button', { class: 'button primary', type: 'button', text: 'Clear filters', onclick: function () { state.q = ''; state.category = 'all'; state.chain = 'all'; writeHash(); render(); } })
       ));
     }
-    var max = list[0].implied_value_usd || 1;
+    var max = effImplied(list[0]) || 1;
     var tbody = el('tbody');
     list.forEach(function (r) {
       var growth = r.change_7d === null ? 'n/a' : fmtPct(r.change_7d);
       var growthClass = r.change_7d === null ? '' : r.change_7d >= 0 ? 'pos' : 'neg';
+      var shown = effImplied(r);
       var tr = el('tr', {
         'data-selected': state.selected === r.slug ? 'true' : 'false',
         tabindex: '0',
@@ -302,8 +308,8 @@
         el('td', { class: 'num ' + growthClass, text: growth }),
         el('td', { class: 'num', text: fmtAge(r.age_days) }),
         el('td', null, el('div', { class: 'implied' },
-          el('div', { class: 'bar', 'aria-hidden': 'true' }, el('i', { style: 'width:' + Math.max(3, Math.round((r.implied_value_usd / max) * 100)) + '%' })),
-          el('span', { class: 'num', text: fmtUsd(r.implied_value_usd) })
+          el('div', { class: 'bar', 'aria-hidden': 'true' }, el('i', { style: 'width:' + Math.max(3, Math.round((shown / max) * 100)) + '%' })),
+          el('span', { class: 'num', text: fmtUsd(shown) })
         )),
         el('td', null, el('span', { class: 'status', text: 'no token' }))
       );
@@ -351,8 +357,44 @@
     );
   }
 
+  // The model sandbox: the reader moves the constants and the board re-ranks
+  // live, so the model's sensitivity is visible instead of asserted. The house
+  // model is the default; Reset returns to it.
+  function sandboxPanel() {
+    var m = effModel();
+    function slider(key, label, min, max, step, fmt) {
+      var input = el('input', { type: 'range', min: String(min), max: String(max), step: String(step), value: String(m[key]), 'aria-label': label });
+      var val = el('b', { class: 'num', text: fmt(m[key]) });
+      input.addEventListener('input', function () { val.textContent = fmt(Number(input.value)); });
+      input.addEventListener('change', function () {
+        var next = {};
+        Object.keys(DATA.model).forEach(function (k) { next[k] = DATA.model[k]; });
+        if (state.custom) Object.keys(state.custom).forEach(function (k) { next[k] = state.custom[k]; });
+        next[key] = Number(input.value);
+        state.custom = next;
+        render();
+      });
+      return el('div', { class: 'sandbox-field' }, el('label', { text: label }), input, val);
+    }
+    var reset = el('button', { class: 'button', type: 'button', text: 'Reset to the house model', onclick: function () { state.custom = null; render(); } });
+    return el('section', { class: 'panel model sandbox' },
+      el('h2', { text: 'Try the model yourself' }),
+      el('p', { class: 'sub', text: 'Move a constant and the board re-ranks on the spot. The house model is base 0.25, growth weight 0.5, growth capped at +300%, maturity over 1,095 days.' }),
+      el('div', { class: 'sandbox-grid' },
+        slider('base_multiple', 'Base multiple of TVL', 0.05, 0.5, 0.01, function (v) { return v.toFixed(2); }),
+        slider('growth_weight', 'Growth weight', 0, 1, 0.05, function (v) { return v.toFixed(2); }),
+        slider('growth_cap', 'Growth cap (%)', 50, 500, 10, function (v) { return '+' + Math.round(v) + '%'; }),
+        slider('maturity_days', 'Maturity window (days)', 365, 1825, 30, function (v) { return Math.round(v) + 'd'; })
+      ),
+      el('div', { class: 'sandbox-foot' },
+        el('span', { class: 'sub', text: state.custom ? 'Showing your model, not the house model.' : 'Showing the house model.' }),
+        reset
+      )
+    );
+  }
+
   function modelPanel() {
-    var m = DATA.model;
+    var m = effModel();
     return el('section', { class: 'panel model' },
       el('h2', { text: 'How implied value is computed' }),
       el('p', { class: 'sub', text: 'Every row is scored by one function of the snapshot figures. No protocol name is special-cased, and no row is hand-picked.' }),
@@ -405,7 +447,7 @@
         el('div', null, el('span', { text: 'Implied value' }), el('b', { class: 'num', text: fmtUsd(row.implied_value_usd) }))
       ),
       el('p', { class: 'sub', text: driverLine(row) }),
-      el('p', { class: 'sub', text: 'Model ' + DATA.model_version + ': the same function scores every protocol. The page recomputes this row as ' + fmtUsd(impliedOf(row, DATA.model)) + (impliedOf(row, DATA.model) === row.implied_value_usd ? ', the same number board.json carries.' : ', which differs from the board: the data would be stale.') + ' This is an estimate, not a price.' })
+      el('p', { class: 'sub', text: 'Model ' + DATA.model_version + ': the same function scores every protocol. The page recomputes this row as ' + fmtUsd(impliedOf(row, effModel())) + (impliedOf(row, effModel()) === row.implied_value_usd ? ', the same number board.json carries.' : (state.custom ? ', under your sandbox model.' : ', which differs from the board: the data would be stale.')) + ' This is an estimate, not a price.' })
     ));
     dialog.appendChild(el('section', { class: 'detail-section' },
       el('h3', { text: 'Farm plan' }),
@@ -431,7 +473,10 @@
     if (state.tab === 'pre-token') shell.appendChild(moversStrip());
     shell.appendChild(controls());
     shell.appendChild(state.tab === 'pre-token' ? boardTable() : liveTable());
-    if (state.tab === 'pre-token') shell.appendChild(modelPanel());
+    if (state.tab === 'pre-token') {
+      shell.appendChild(modelPanel());
+      shell.appendChild(sandboxPanel());
+    }
     app.appendChild(shell);
     app.setAttribute('aria-busy', 'false');
     if (!dialog.isConnected) app.appendChild(dialog);

@@ -127,6 +127,13 @@ tbody tr[data-selected="true"] { background: var(--accent-soft); }
 .status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
 
 .model { margin-top: var(--step-4); padding: var(--step-5); display: grid; gap: var(--step-3); }
+.sandbox { margin-top: var(--step-4); }
+.sandbox-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--step-4); }
+.sandbox-field { display: grid; gap: var(--step-2); }
+.sandbox-field label { color: var(--muted); font-size: 12px; }
+.sandbox-field input[type="range"] { width: 100%; accent-color: var(--accent); }
+.sandbox-field b { font-weight: 500; }
+.sandbox-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--step-3); flex-wrap: wrap; }
 .formula { font-family: var(--font-num); font-size: 13px; line-height: 1.7; color: var(--muted); overflow-wrap: anywhere; }
 .empty { padding: var(--step-7) var(--step-5); text-align: center; display: grid; gap: var(--step-3); justify-items: center; }
 .empty p { color: var(--muted); }
