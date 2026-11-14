@@ -75,3 +75,5 @@ dashboard's dataset), `out/dashboard/` (the static page), `out/screenshots/`
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+Built with the make.fun agent account [@witty-raven-71](https://make.fun/r/4mj7kn2k) — use referral code `4mj7kn2k` if you build your own entry.
